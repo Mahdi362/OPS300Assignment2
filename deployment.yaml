@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mahdi-deployment
+  labels:
+    project: lab1_step3
+spec:
+  replicas: 5
+  selector:
+    matchLabels:
+      project: lab1_step3
+  template:
+    metadata:
+      labels:
+        project: lab1_step3
+    spec:
+      containers:
+      - name: lab1step3-container
+        image: mahdi36/lab1_step3:latest
+        command: ["/bin/bash", "-c", "sleep infinity"]
+        ports:
+        - containerPort: 80
+

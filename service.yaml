@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mahdi-service
+  labels:
+    project: lab1_step3
+spec:
+  type: ClusterIP
+  selector:
+    project: lab1_step3
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: 80
+
