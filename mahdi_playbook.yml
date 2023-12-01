@@ -1,0 +1,101 @@
+---
+- name: Reading my client machines
+  hosts: localhost
+  gather_facts: no
+  become: no
+  vars_files:
+    - /home/Afshar/pass_vault.yml
+  tasks:
+    - name: Making sure to read the names inside my file
+      command: cat /home/Afshar/workers.txt
+      register: names
+      tags:
+        - ops
+
+    - name: Splitting the names into a list
+      set_fact:
+        listclients: "{{ names.stdout_lines }}"
+      tags:
+        - ops
+
+    - name: Moving names to a different file
+      copy:
+        content: "{{ listclients | to_nice_json }}"
+        dest: /home/Afshar/names_file.json
+      tags:
+        - ops
+
+- name: Setting up Docker and Configuring Swarm
+  hosts: mahdigroup
+  become: yes
+  vars:
+    token: ""
+  vars_files:
+    - /home/Afshar/mahdi_vault.yml
+    - /home/Afshar/pass_vault.yml
+  tasks:
+    - name: Install Docker
+      package:
+        name: docker-ce
+        state: latest
+
+    - name: Start Docker Service
+      service:
+        name: docker
+        state: started
+        enabled: yes
+
+    - name: Change Firewalls
+      command: "firewall-cmd --add-port=2377/tcp --permanent"
+      become: yes
+
+    - name: Add Swarm port to firewalld
+      command: "firewall-cmd --reload"
+      become: yes
+
+    - name: Leave the Swarm
+      command: docker swarm leave --force
+      ignore_errors: yes
+
+    - name: Running Docker Swarm to get token
+      command: docker swarm init
+      register: output_token
+      when: "inventory_hostname == 'docker_manager'"
+
+    - name: Getting the token
+      set_fact:
+        token: "{{ output_token.stdout | regex_search('SWMTKN-[^ ]+') }}"
+      when: "inventory_hostname == 'docker_manager'"
+
+    - name: Taking the output to the host vault file
+      copy:
+        content: "swarm_tkn: {{ token }}"
+        dest: /home/Afshar/mahdi_vault.yml
+      delegate_to: localhost
+      when: "inventory_hostname == 'docker_manager'"
+
+    - name: Clients joining the swarm
+      command: "docker swarm join --token {{ token }} 192.168.195.139:2377"
+      when: "inventory_hostname != 'docker_manager'"
+
+    - name: This reads the names from the file
+      slurp:
+        src: /home/Afshar/names_file.json
+      register: output_file
+      delegate_to: localhost
+      tags:
+        - ops
+
+    - name: Load the names from JSON
+      set_fact:
+        listclients: "{{ output_file['content'] | b64decode | from_json }}"
+      tags:
+        - ops
+
+    - name: Joining the clients from the file
+      command: "docker swarm join --token {{ token }} 192.168.195.139:2377"
+      loop: "{{ listclients }}"
+      when: "inventory_hostname in groups['mahdigroup'] and inventory_hostname == item"
+      tags:
+        - ops
+

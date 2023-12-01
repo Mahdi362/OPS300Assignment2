@@ -5,7 +5,7 @@ metadata:
   labels:
     project: lab1_step3
 spec:
-  replicas: 5
+  replicas: 8
   selector:
     matchLabels:
       project: lab1_step3
